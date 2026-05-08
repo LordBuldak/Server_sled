@@ -4,7 +4,6 @@ from flask import (
     jsonify,
     render_template,
     redirect,
-    request,
     session,
     flash,
     url_for,
@@ -12,14 +11,15 @@ from flask import (
 import datetime
 import sqlite3
 import numpy as np
-import dlib
-from skimage import io
+import face_recognition
+from skimage import io as ios
 import os
 import json
 import subprocess
 import hashlib
+import io
 
-rocess1 = subprocess.Popen(["py", "init_db.py"])
+process1 = subprocess.Popen(["py", "init_db.py"])
 app = Flask(__name__)
 app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
 app.config["UPLOAD_FOLDER"] = "static/photos"
@@ -30,9 +30,8 @@ ADMIN_CREDENTIALS = {
     "password": "44ac9a7d1fed334c2d41c75d56e33e04857988f767ae4fccac6b6b1799dd8f80",
 }
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-model = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")  # type: ignore
-facerec = dlib.face_recognition_model_v1("dlib_face_recognition_resnet_model_v1.dat")  # type: ignore
-detector = dlib.get_frontal_face_detector()  # type: ignore
+
+# dlib инициализация удалена. face_recognition загружает модели автоматически при первом вызове.
 sp = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
 
 
@@ -105,7 +104,7 @@ def not_rasp_player():
         records = [
             r
             for r in records
-            if len(r) >= 4 and isinstance(r[2], str) and str(r)[2] >= cutoff_str
+            if len(r) >= 4 and isinstance(r[2], str) and r[2] >= cutoff_str  # pyright: ignore[reportOperatorIssue]
         ]
 
         with open("data.json", "w", encoding="utf-8") as f:
@@ -379,30 +378,35 @@ def add_student(id_group):
     if request.method == "POST":
         name = str(request.form.get("student_name")).strip()
         photo = request.files.get("photo")
-
         if not name:
-            return "Имя студента обязательно", 400
+            return jsonify({"error": "Имя студента не указано"}), 400
 
-        filename = None
-        if photo and photo.filename:
-            if allowed_file(photo.filename):
-                ext = photo.filename.rsplit(".", 1)[1].lower()
-                filename = f"default.{ext}"
-                photo.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
-            else:
-                return "Недопустимый формат файла", 400
-        else:
-            return "Нужна фотография студента", 400
+        if not photo or not photo.filename:
+            return jsonify({"error": "Нужна фотография студента"}), 400
 
-        img = io.imread(app.config["UPLOAD_FOLDER"] + "/" + filename)
-        dets = detector(img, 1)
+        if not allowed_file(photo.filename):
+            return jsonify({"error": "Недопустимый формат файла"}), 400
+
+        # 1. Читаем файл в память (байты)
+        photo_bytes = photo.read()
+        if not photo_bytes:
+            return jsonify({"error": "Файл пустой или поврежден"}), 400
+
         try:
-            for k, d in enumerate(dets):
-                shape = model(img, d)
-            face1 = facerec.compute_face_descriptor(img, shape)  # type: ignore
-        except:
-            return "Нужна фотография студента", 400
-        embedding = np.array(face1).tobytes()
+            img = ios.imread(io.BytesIO(photo_bytes))
+        except Exception as e:
+            return jsonify({"error": f"Не удалось прочитать изображение: {str(e)}"}), 400
+        
+        try:
+            # face_recognition автоматически детектирует лица и возвращает список 128-D эмбеддингов
+            face_encodings = face_recognition.face_encodings(img)
+            if len(face_encodings) == 0:
+                return jsonify({"error": "Лицо не найдено на фотографии"}), 400
+            # Берём первое обнаруженное лицо и преобразуем в bytes
+            embedding = face_encodings[0].tobytes()
+        except Exception as e:
+            return jsonify({"error": f"Ошибка распознавания лица: {str(e)}"}), 400
+            
         con = sqlite3.connect("students.db")
         con.execute(
             "INSERT INTO student (name_student, vector, id_group) VALUES (?,?,?)",
@@ -410,7 +414,7 @@ def add_student(id_group):
         )
         con.commit()
 
-        return redirect(f"/group/{id_group}")
+        return jsonify({'success': True}), 201    
     if not is_logged_in():
         return redirect(url_for("login"))
     return render_template("add_student.html", id_group=id_group)
