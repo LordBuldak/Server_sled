@@ -41,6 +41,60 @@
       margin-bottom: 20px;
     }
 
+    /* Стили для сообщений об ошибках/успехе */
+    .error-box, .success-box {
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      font-size: 0.95em;
+      line-height: 1.5;
+      animation: slideDown 0.3s ease;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .error-box {
+      background-color: #fef2f2;
+      border: 1px solid #fecaca;
+      border-left: 4px solid #ef4444;
+      color: #991b1b;
+    }
+
+    .error-box::before {
+      content: "⚠️";
+      font-size: 1.1em;
+      flex-shrink: 0;
+    }
+
+    .success-box {
+      background-color: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-left: 4px solid #22c55e;
+      color: #166534;
+    }
+
+    .success-box::before {
+      content: "✅";
+      font-size: 1.1em;
+      flex-shrink: 0;
+    }
+
+    .error-box.hidden, .success-box.hidden {
+      display: none;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
     .form-group {
       margin-bottom: 20px;
     }
@@ -76,6 +130,11 @@
 
     .submit-button:hover {
       background-color: #2c6ed4;
+    }
+
+    .submit-button:disabled {
+      background-color: #94a3b8;
+      cursor: not-allowed;
     }
 
     .back-button {
@@ -162,6 +221,9 @@
   <div class="container">
     <h1>➕ Добавить студента</h1>
     
+    <!-- Контейнер для сообщений об ошибках/успехе -->
+    <div id="error-message" class="error-box hidden" role="alert"></div>
+    
     <form action="/add_student/{{ id_group }}" method="POST" enctype="multipart/form-data">
       <div class="form-group">
         <label for="student_name">ФИО студента</label>
@@ -207,58 +269,93 @@
     const openCameraBtn = document.getElementById('open-camera-btn');
     const captureBtn = document.getElementById('capture-btn');
     const cancelCameraBtn = document.getElementById('cancel-camera-btn');
+    const form = document.querySelector('form');
+    const submitBtn = form.querySelector('.submit-button');
+    const errorBox = document.getElementById('error-message');
 
-    // Открыть камеру
+    // === Функции вывода сообщений ===
+    
+    /**
+     * Показать сообщение об ошибке
+     * @param {string} message - Текст ошибки
+     * @param {number} autoHide - Автоматически скрыть через (мс), 0 = не скрывать
+     */
+    function showError(message, autoHide = 5000) {
+      errorBox.textContent = message;
+      errorBox.className = 'error-box';
+      errorBox.hidden = false;
+      errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      if (autoHide > 0) {
+        setTimeout(hideMessage, autoHide);
+      }
+    }
+
+    /**
+     * Показать сообщение об успехе
+     * @param {string} message - Текст сообщения
+     * @param {number} autoHide - Автоматически скрыть через (мс)
+     */
+    function showSuccess(message, autoHide = 3000) {
+      errorBox.textContent = message;
+      errorBox.className = 'success-box';
+      errorBox.hidden = false;
+      
+      if (autoHide > 0) {
+        setTimeout(hideMessage, autoHide);
+      }
+    }
+
+    /**
+     * Скрыть сообщение
+     */
+    function hideMessage() {
+      errorBox.hidden = true;
+      errorBox.className = 'error-box hidden';
+    }
+
+    // === Обработчики камеры ===
+
     openCameraBtn.addEventListener('click', async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = stream;
         cameraContainer.style.display = 'block';
-        openCameraBtn.style.display = 'none'; // Скрываем кнопку, пока камера активна
+        openCameraBtn.style.display = 'none';
       } catch (err) {
-        alert('Не удалось получить доступ к камере: ' + err.message);
+        showError('Не удалось получить доступ к камере: ' + err.message, 0);
         console.error(err);
       }
     });
 
-    // Сфотографировать
     captureBtn.addEventListener('click', () => {
       const context = canvas.getContext('2d');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Получаем изображение как Data URL
       canvas.toBlob((blob) => {
-        // Создаем File из Blob
         const file = new File([blob], "photo.jpg", { type: "image/jpeg" });
-
-        // Создаем DataTransfer для установки файла в input
         const dataTransfer = new DataTransfer();
         dataTransfer.items.add(file);
         photoInput.files = dataTransfer.files;
 
-        // Показываем превью
         const imageUrl = URL.createObjectURL(file);
         previewImg.src = imageUrl;
         previewImg.style.display = 'block';
 
-        // Очищаем и скрываем камеру
         stopCamera();
         cameraContainer.style.display = 'none';
-        openCameraBtn.style.display = 'block'; // Показываем кнопку снова
-
+        openCameraBtn.style.display = 'block';
       }, 'image/jpeg', 0.9);
     });
 
-    // Отмена
     cancelCameraBtn.addEventListener('click', () => {
       stopCamera();
       cameraContainer.style.display = 'none';
       openCameraBtn.style.display = 'block';
     });
 
-    // Функция остановки камеры
     function stopCamera() {
       if (video.srcObject) {
         video.srcObject.getTracks().forEach(track => track.stop());
@@ -266,7 +363,6 @@
       }
     }
 
-    // Предпросмотр при выборе файла через input
     photoInput.addEventListener('change', function(event) {
       const file = event.target.files[0];
       if (file) {
@@ -278,6 +374,70 @@
         reader.readAsDataURL(file);
       } else {
         previewImg.style.display = 'none';
+      }
+    });
+
+    // === Обработка отправки формы через fetch ===
+    
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const formData = new FormData(form);
+      
+      // Блокируем кнопку на время отправки
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Отправка...';
+      hideMessage();
+      
+      try {
+        const response = await fetch(form.action, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!response.ok) {
+          let errorMsg = 'Произошла ошибка при добавлении студента';
+          try {
+            const data = await response.json();
+            errorMsg = data.error || data.message || errorMsg;
+          } catch {
+            const text = await response.text();
+            if (text) errorMsg = text;
+          }
+          throw new Error(errorMsg);
+        }
+        
+        // Успех
+        showSuccess('✅ Студент успешно добавлен!', 1500);
+        
+        // Очистка формы и редирект
+        setTimeout(() => {
+          form.reset();
+          previewImg.style.display = 'none';
+          window.location.href = '/groups';
+        }, 1500);
+        
+      } catch (error) {
+        console.error('Ошибка отправки:', error);
+        showError(error.message || 'Не удалось добавить студента. Проверьте соединение.', 0);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Добавить студента';
+      }
+    });
+
+    // === Показать ошибку из URL-параметров (если сервер редиректит с ?error=...) ===
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const errorMsg = urlParams.get('error');
+      const successMsg = urlParams.get('success');
+      
+      if (errorMsg) {
+        showError(decodeURIComponent(errorMsg), 0);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (successMsg) {
+        showSuccess(decodeURIComponent(successMsg), 3000);
+        window.history.replaceState({}, document.title, window.location.pathname);
       }
     });
   </script>

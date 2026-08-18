@@ -266,7 +266,7 @@ def add_group():
             """
             INSERT INTO groups(groups_name,rasp) 
             VALUES (?,?)
-        """,
+            """,
             [group_name, f"{dict_rasp}".replace("'", '"')],
         )
         con.commit()
