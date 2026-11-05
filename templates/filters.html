@@ -132,12 +132,6 @@
             color: var(--dark-text);
         }
 
-        .filter-id {
-            font-size: 13px;
-            color: var(--gray-text);
-            font-family: 'Courier New', monospace;
-        }
-
         .filter-controls {
             display: flex;
             align-items: center;
@@ -145,7 +139,7 @@
             flex-shrink: 0;
         }
 
-        /* Стиль переключателя — улучшен */
+        /* Стиль переключателя */
         .switch {
             position: relative;
             display: inline-block;
@@ -193,7 +187,7 @@
             transform: translateX(28px);
         }
 
-        /* Кнопка удаления — стиль иконки */
+        /* Кнопка удаления */
         .btn-delete {
             background: none;
             border: none;
@@ -215,7 +209,6 @@
             transform: rotate(15deg);
         }
 
-        /* Индикатор статуса */
         .status-indicator {
             font-size: 13px;
             min-width: 90px;
@@ -247,7 +240,6 @@
             100% { opacity: 1; }
         }
 
-        /* Адаптивность */
         @media (max-width: 768px) {
             body {
                 padding: 15px 10px;
@@ -266,10 +258,6 @@
             .filter-controls {
                 justify-content: space-between;
                 width: 100%;
-            }
-
-            .filter-click-area {
-                padding-right: 0;
             }
         }
     </style>
@@ -291,22 +279,22 @@
         <h2>Фильтры</h2>
         <div class="filters-container" id="filters-list">
             {% for filter in data %}
-                <div class="filter-item" data-id="{{ filter[0] }}">
-                    <div class="filter-click-area" onclick="window.location.href='/protiv/{{ filter[0] }}'">
+                <div class="filter-item" data-id="{{ filter.id }}">
+                    <div class="filter-click-area" onclick="window.location.href='/protiv/{{ filter.id }}'">
                         <div class="filter-info">
-                            <div class="filter-title">{{ filter[1] }}</div>
+                            <div class="filter-title">{{ filter.name_filter }}</div>
                         </div>
                     </div>
                     <div class="filter-controls">
                         <label class="switch">
                             <input type="checkbox"
-                                   data-id="{{ filter[0] }}"
-                                   onchange="toggleFilterStatus({{ loop.index0 }}, this.checked, this)"
-                                   {% if filter[3] %}checked{% endif %}>
+                                   data-id="{{ filter.id }}"
+                                   onchange="toggleFilterStatus({{ filter.id }}, this.checked, this)"
+                                   {% if filter.activate == 1 %}checked{% endif %}>
                             <span class="slider"></span>
                         </label>
                         <span class="status-indicator"></span>
-                        <button class="btn-delete" title="Удалить фильтр" onclick="deleteFilter({{ filter[0] }}, this.parentElement.parentElement)">
+                        <button class="btn-delete" title="Удалить фильтр" onclick="deleteFilter({{ filter.id }}, this.parentElement.parentElement)">
                             <i class="fas fa-trash-alt"></i>
                         </button>
                     </div>
@@ -316,10 +304,7 @@
     </div>
 
     <script>
-        const filtersData = {{ data | tojson }};
-
-        async function toggleFilterStatus(index, isActive, checkboxElement) {
-            const filterId = filtersData[index][0];
+        async function toggleFilterStatus(filterId, isActive, checkboxElement) {
             const indicator = checkboxElement.parentElement.querySelector('.status-indicator');
 
             if (indicator) {
@@ -331,8 +316,7 @@
                 const response = await fetch('/update-filter-status', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         id: filterId,
@@ -351,7 +335,6 @@
                         indicator.textContent = "✓ Сохранено";
                         indicator.className = "status-indicator saved";
                     }
-                    filtersData[index][3] = isActive ? 1 : 0;
 
                     setTimeout(() => {
                         if (indicator) {
@@ -372,7 +355,6 @@
                 }
 
                 checkboxElement.checked = !isActive;
-                filtersData[index][3] = isActive ? 0 : 1;
 
                 setTimeout(() => {
                     if (indicator) {
@@ -384,7 +366,7 @@
         }
 
         async function deleteFilter(filterId, filterElement) {
-            if (!confirm(`Вы уверены, что хотите удалить фильтр #${filterId}?`)) {
+            if (!confirm(`Вы уверены, что хотите удалить этот фильтр?`)) {
                 return;
             }
 
@@ -394,8 +376,7 @@
                 const response = await fetch(`/delete-filter/${filterId}`, {
                     method: 'DELETE',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
+                        'Content-Type': 'application/json'
                     }
                 });
 
@@ -404,11 +385,6 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    const index = filtersData.findIndex(f => f[0] === filterId);
-                    if (index !== -1) {
-                        filtersData.splice(index, 1);
-                    }
-
                     filterElement.style.opacity = '0';
                     setTimeout(() => {
                         filterElement.remove();
@@ -423,21 +399,6 @@
                 alert('Не удалось удалить фильтр. Проверьте консоль.');
                 filterElement.classList.remove('deleting');
             }
-        }
-
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue;
         }
     </script>
 </body>

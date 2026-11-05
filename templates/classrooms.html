@@ -252,10 +252,11 @@
                     <div class="icon">
                         <i class="fas fa-door-open"></i>
                     </div>
-                    <a href="/filter/{{ classroom[0] }}">
-                        {{ classroom[1] }}
+                    <!-- ИЗМЕНЕНО: с индексов на свойства класса -->
+                    <a href="/filter/{{ classroom.id }}">
+                        {{ classroom.name }}
                     </a>
-                    <button class="btn-delete" onclick="confirmDelete({{ classroom[0] }})" title="Удалить кабинет">
+                    <button class="btn-delete" onclick="confirmDelete({{ classroom.id }})" title="Удалить кабинет">
                         <i class="fas fa-trash"></i>
                     </button>
                 </li>

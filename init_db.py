@@ -1,119 +1,119 @@
-import sqlite3
+import asyncio
+from sqlalchemy import String, Integer, LargeBinary, ForeignKey, Text, text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncAttrs
 
-con = sqlite3.connect("students.db")
-con.execute("PRAGMA foreign_keys = ON;")
-cursor = con.cursor()
+DATABASE_URL = "sqlite+aiosqlite:///school.db"
 
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS groups (        
-        id INTEGER PRIMARY KEY,
-        groups_name TEXT NOT NULL, 
-        rasp JSON
-    )
-""")
+class Base(AsyncAttrs, DeclarativeBase):
+    pass
 
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS student (
-        id INTEGER PRIMARY KEY,
-        name_student TEXT NOT NULL,
-        vector BLOB,
-        id_group INTEGER,
-        FOREIGN KEY(id_group) REFERENCES groups(id) ON DELETE CASCADE
-    )
-""")
+class Group(Base):
+    __tablename__ = "groups"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    groups_name: Mapped[str] = mapped_column(String, nullable=False)
+    rasp: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS pris (
-        id INTEGER PRIMARY KEY,
-        group_id INTEGER,
-        student_id INTEGER,
-        data TEXT,
-        FOREIGN KEY(group_id) REFERENCES groups(id) ON DELETE CASCADE,
-        FOREIGN KEY(student_id) REFERENCES student(id) ON DELETE CASCADE
-    )
-""")
+    students = relationship("Student", back_populates="group", cascade="all, delete-orphan")
+    pris_records = relationship("Pris", back_populates="group", cascade="all, delete-orphan")
+    violations = relationship("Narush", back_populates="group")
 
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS narush (
-        id INTEGER PRIMARY KEY,
-        anti_name TEXT NOT NULL,
-        id_student INTEGER,
-        time TEXT,
-        id_pris INTEGER,
-        group_id INTEGER,
-        FOREIGN KEY(id_student) REFERENCES student(id) ON DELETE SET NULL,
-        FOREIGN KEY(id_pris) REFERENCES pris(id) ON DELETE SET NULL,
-        FOREIGN KEY(group_id) REFERENCES groups(id) ON DELETE SET NULL
-    )
-""")
+class Student(Base):
+    __tablename__ = "student"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name_student: Mapped[str] = mapped_column(String, nullable=False)
+    vector: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    id_group: Mapped[int | None] = mapped_column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=True)
 
-con.commit()
-con.close()
+    group = relationship("Group", back_populates="students")
+    pris_records = relationship("Pris", back_populates="student", cascade="all, delete-orphan")
+    violations = relationship("Narush", back_populates="student")
 
-con = sqlite3.connect("protiv.db")
-cur = con.cursor()
+class Pris(Base):
+    __tablename__ = "pris"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    group_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=True)
+    student_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("student.id", ondelete="CASCADE"), nullable=True)
+    data: Mapped[str | None] = mapped_column(String, nullable=True)
 
-con.execute("PRAGMA foreign_keys = ON")
+    group = relationship("Group", back_populates="pris_records")
+    student = relationship("Student", back_populates="pris_records")
+    violations = relationship("Narush", back_populates="pris")
+
+class Classroom(Base):
+    __tablename__ = "classroom"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    filters = relationship("Filter", back_populates="classroom", cascade="all, delete-orphan")
+
+class Filter(Base):
+    __tablename__ = "filter"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name_filter: Mapped[str | None] = mapped_column(String, nullable=True)
+    classroom_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("classroom.id", ondelete="CASCADE"), nullable=True)
+    activate: Mapped[int | None] = mapped_column(Integer, default=0)
+
+    classroom = relationship("Classroom", back_populates="filters")
+    anti_websites = relationship("AntiWebsite", back_populates="filter", cascade="all, delete-orphan")
+    anti_apps = relationship("AntiApp", back_populates="filter", cascade="all, delete-orphan")
+
+class AntiWebsite(Base):
+    __tablename__ = "anti_website"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name_site: Mapped[str | None] = mapped_column(String, nullable=True)
+    block: Mapped[int | None] = mapped_column(Integer, default=0)
+    id_filter: Mapped[int | None] = mapped_column(Integer, ForeignKey("filter.id", ondelete="CASCADE"), nullable=True)
+
+    filter = relationship("Filter", back_populates="anti_websites")
+
+class AntiApp(Base):
+    __tablename__ = "anti_app"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name_app: Mapped[str | None] = mapped_column(String, nullable=True)
+    block: Mapped[int | None] = mapped_column(Integer, default=0)
+    id_filter: Mapped[int | None] = mapped_column(Integer, ForeignKey("filter.id", ondelete="CASCADE"), nullable=True)
+
+    filter = relationship("Filter", back_populates="anti_apps")
+
+class Narush(Base):
+    __tablename__ = "narush"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    anti_name: Mapped[str] = mapped_column(String, nullable=False)
+    id_student: Mapped[int | None] = mapped_column(Integer, ForeignKey("student.id", ondelete="SET NULL"), nullable=True)
+    time: Mapped[str | None] = mapped_column(String, nullable=True)
+    id_pris: Mapped[int | None] = mapped_column(Integer, ForeignKey("pris.id", ondelete="SET NULL"), nullable=True)
+    group_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("groups.id", ondelete="SET NULL"), nullable=True)
+
+    student = relationship("Student", back_populates="violations")
+    pris = relationship("Pris", back_populates="violations")
+    group = relationship("Group", back_populates="violations")
+
+class Teacher(Base):
+    __tablename__ = "teachers"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    login: Mapped[str | None] = mapped_column(String, nullable=True)
+    password: Mapped[str | None] = mapped_column(String, nullable=True)
+    name_teacher: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
-cur.execute(
-    """
-    CREATE TABLE IF NOT EXISTS classroom(
-        id INTEGER PRIMARY KEY,
-        name TEXT
-    )
-"""
-)
+async def init_models():
+    engine = create_async_engine(DATABASE_URL, echo=True)
+    async with engine.begin() as conn:
+        await conn.execute(text("PRAGMA foreign_keys = ON;"))
+        await conn.execute(text("PRAGMA journal_mode = WAL;"))
+        await conn.run_sync(Base.metadata.create_all)
+    await engine.dispose()
+    print("База данных SQLite с асинхронной SQLAlchemy успешно инициализирована!")
 
-cur.execute(
-    """
-    CREATE TABLE IF NOT EXISTS filter(
-        id INTEGER PRIMARY KEY,
-        name_filter TEXT,
-        classroom_id INTEGER,
-        activate INTEGER,
-        FOREIGN KEY (classroom_id) REFERENCES classroom(id) ON DELETE CASCADE
-    )
-"""
-)
-
-cur.execute(
-    """
-    CREATE TABLE IF NOT EXISTS anti_website(
-        id INTEGER PRIMARY KEY,
-        name_site TEXT,
-        block INTEGER,
-        id_filter INTEGER,
-        FOREIGN KEY (id_filter) REFERENCES filter(id) ON DELETE CASCADE
-    )
-"""
-)
-
-cur.execute(
-    """
-    CREATE TABLE IF NOT EXISTS anti_app(
-        id INTEGER PRIMARY KEY,
-        name_app TEXT,
-        block INTEGER DEFAULT 0,
-        id_filter INTEGER,
-        FOREIGN KEY (id_filter) REFERENCES filter(id) ON DELETE CASCADE
-    )
-"""
-)
-
-con.commit()
-con.close()
-
-con = sqlite3.connect("teachers.db")
-
-con.execute(
-    """
-        CREATE TABLE IF NOT EXISTS teachers(
-            id INTEGER PRIMARY KEY, 
-            login TEXT, 
-            password TEXT
-        , name_teacher TEXT)
-            """
-)
-con.commit()
-con.close()
+if __name__ == "__main__":
+    asyncio.run(init_models())

@@ -150,8 +150,8 @@
     <div class="groups-grid">
       {% if groups %}
         {% for group in groups %}
-          <a href="/group/{{ group[0] }}" class="group-button">
-            {{ group[1] }}
+          <a href="/group/{{ group.id }}" class="group-button">
+            {{ group.groups_name }}
           </a>
         {% endfor %}
       {% else %}

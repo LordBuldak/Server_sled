@@ -56,12 +56,6 @@
       border: 1px solid #f1a4a4;
     }
 
-    .alert.success {
-      background-color: #e6f7e6;
-      color: #2ecc71;
-      border: 1px solid #a6e0a6;
-    }
-
     .form-group {
       margin-bottom: 20px;
     }
@@ -103,16 +97,12 @@
   <div class="login-container">
     <h1>🔐 Авторизация </h1>
 
-    <!-- Flash-сообщения -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert {{ 'error' if category == 'error' else 'success' }}">
-            {{ message }}
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+    <!-- Вывод ошибки от FastAPI -->
+    {% if error %}
+      <div class="alert error">
+        {{ error }}
+      </div>
+    {% endif %}
 
     <form method="POST" action="/login">
       <div class="form-group">

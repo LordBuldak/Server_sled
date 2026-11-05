@@ -1,4 +1,8 @@
 .venv/
+.vscode/
+__pycache__/
 *.png
 *.jpg
 *.db
+*.db-shm
+*.db-wal
