@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Фильтры кабинета — {{ name }}</title>
-    <!-- Подключаем Font Awesome для иконок -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         :root {
@@ -265,12 +264,10 @@
 <body>
     <h1>Фильтры кабинета — {{ name }}</h1>
 
-    <!-- Кнопка возврата назад -->
     <a href="/classrooms" class="btn" style="background-color: #6c757d;">
         <i class="fas fa-arrow-left"></i> Назад к кабинетам
     </a>
 
-    <!-- Кнопка создания нового фильтра -->
     <a href="/new_filter/{{ id }}" class="btn">
         <i class="fas fa-plus"></i> Создать новый фильтр
     </a>
@@ -291,7 +288,8 @@
                 <label class="switch">
                     <input type="checkbox"
                            id="face-rec-toggle"
-                           onchange="toggleFaceRecognition({{ id }}, this.checked, this)">
+                           onchange="toggleFaceRecognition({{ id }}, this.checked, this)"
+                           {% if face_rec_enabled %}checked{% endif %}>
                     <span class="slider"></span>
                 </label>
             </div>
@@ -380,7 +378,7 @@
         }
 
         async function toggleFilterStatus(filterId, isActive, checkboxElement) {
-            const indicator = checkboxElement.parentElement.querySelector('.status-indicator');
+            const indicator = checkboxElement.parentElement.parentElement.querySelector('.status-indicator');
 
             if (indicator) {
                 indicator.textContent = "Сохранение...";

@@ -1,4 +1,5 @@
 import datetime
+import io
 import os
 import json
 import hashlib
@@ -57,7 +58,7 @@ def allowed_file(filename: str):
 def is_logged_in(request: Request):
     return request.session.get("is_login") is True
 
-# Менеджер WebSocket соединений для передачи правил клиентам
+# Менеджер WebSocket соединений для передачи правил клиентам[cite: 1]
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
@@ -81,10 +82,10 @@ async def get_active_rules_for_host(hostname: str, db: AsyncSession):
     classroom_ids = classrooms_res.scalars().all()
 
     if not classroom_ids:
-        return {"allowed_websites": [], "blocked_apps": [], "face_rec_enabled": True}
+        return {"allowed_websites": [], "blocked_apps": [], "face_rec_enabled": False}
 
     c_id = classroom_ids[0]
-    face_rec_enabled = FACE_REC_STATUS.get(c_id, True)
+    face_rec_enabled = FACE_REC_STATUS.get(c_id, False)
 
     filters_res = await db.execute(
         select(Filter.id).where(Filter.classroom_id.in_(classroom_ids), Filter.activate == 1)
@@ -94,13 +95,13 @@ async def get_active_rules_for_host(hostname: str, db: AsyncSession):
     if not filter_ids:
         return {"allowed_websites": [], "blocked_apps": [], "face_rec_enabled": face_rec_enabled}
 
-    # Белый список сайтов (block == 0 значит РАЗРЕШЕНО)
+    # Белый список сайтов (block == 0 значит РАЗРЕШЕНО)[cite: 1]
     sites_res = await db.execute(
         select(AntiWebsite.name_site).where(AntiWebsite.block == 0, AntiWebsite.id_filter.in_(filter_ids))
     )
     allowed_sites = list(sites_res.scalars().all())
 
-    # Черный список приложений (block == 1 значит ЗАБЛОКИРОВАНО)
+    # Черный список приложений (block == 1 значит ЗАБЛОКИРОВАНО)[cite: 1]
     apps_res = await db.execute(
         select(AntiApp.name_app).where(AntiApp.block == 1, AntiApp.id_filter.in_(filter_ids))
     )
@@ -111,6 +112,16 @@ async def get_active_rules_for_host(hostname: str, db: AsyncSession):
         "blocked_apps": blocked_apps,
         "face_rec_enabled": face_rec_enabled
     }
+
+async def notify_classroom_clients(classroom_id: int, db: AsyncSession):
+    room_res = await db.execute(select(Classroom.name).where(Classroom.id == classroom_id))
+    room_name = room_res.scalar_one_or_none()
+
+    if room_name:
+        for hostname in list(manager.active_connections.keys()):
+            if room_name in hostname:
+                rules = await get_active_rules_for_host(hostname, db)
+                await manager.send_rules(hostname, {"type": "rules", "data": rules})
 
 async def get_current_group_id(db: AsyncSession) -> int:
     today = datetime.datetime.now()
@@ -157,18 +168,10 @@ async def websocket_endpoint(websocket: WebSocket, hostname: str):
 async def update_face_rec_status(request: Request, db: AsyncSession = Depends(get_db)):
     data = await request.json()
     classroom_id = data.get("classroom_id")
-    is_enabled = data.get("face_rec_enabled", True)
+    is_enabled = bool(data.get("face_rec_enabled", False))
 
     FACE_REC_STATUS[classroom_id] = is_enabled
-
-    room_res = await db.execute(select(Classroom.name).where(Classroom.id == classroom_id))
-    room_name = room_res.scalar_one_or_none()
-
-    if room_name:
-        for hostname in list(manager.active_connections.keys()):
-            if room_name in hostname:
-                rules = await get_active_rules_for_host(hostname, db)
-                await manager.send_rules(hostname, {"type": "rules", "data": rules})
+    await notify_classroom_clients(classroom_id, db)
 
     return {"success": True}
 
@@ -180,7 +183,8 @@ async def match_student(request: Request, db: AsyncSession = Depends(get_db)):
     hostname = payload.get("hostname", "")
 
     if not vector:
-        raise HTTPException(status_code=400, detail="Вектор отсутствует")
+        await record_unrecognized(item_name, hostname)
+        return {"status": "unrecognized", "reason": "Face recognition disabled or no face detected"}
 
     group_id = await get_current_group_id(db)
     if group_id == 0:
@@ -241,7 +245,7 @@ async def record_unrecognized(item_name: str, hostname: str):
     with open("data.json", "w", encoding="utf-8") as f:
         json.dump(records, f, ensure_ascii=False, indent=2)
 
-# ==================== ВЕБ-ИНТЕРФЕЙС И МАРШРУТЫ ====================
+# ==================== ВЕБ-ИНТЕРФЕЙС И МАРШРУТЫ ====================[cite: 1]
 
 @app.get("/")
 async def glav(request: Request):
@@ -458,13 +462,48 @@ async def filters(classroom_id: int, request: Request, db: AsyncSession = Depend
     return templates.TemplateResponse(request, "filters.html", {
         "data": filters_res.scalars().all(), 
         "name": room_res.scalar_one_or_none(), 
-        "id": classroom_id
+        "id": classroom_id,
+        "face_rec_enabled": FACE_REC_STATUS.get(classroom_id, False)
     })
+
+@app.get("/new_filter/{classroom_id}")
+async def new_filter_get(classroom_id: int, request: Request):
+    if not is_logged_in(request):
+        return RedirectResponse(url="/login", status_code=303)
+    return templates.TemplateResponse(request, "add_filter.html", {"id": classroom_id})
+
+@app.post("/new_filter/{classroom_id}")
+async def new_filter_post(
+    classroom_id: int, 
+    filterName: str = Form(...), 
+    db: AsyncSession = Depends(get_db)
+):
+    new_f = Filter(name_filter=filterName.strip(), classroom_id=classroom_id, activate=0)
+    db.add(new_f)
+    await db.flush()
+    return RedirectResponse(url=f"/filter/{classroom_id}", status_code=303)
+
+@app.delete("/delete-filter/{filter_id}")
+async def delete_filter(filter_id: int, db: AsyncSession = Depends(get_db)):
+    f_res = await db.execute(select(Filter.classroom_id).where(Filter.id == filter_id))
+    c_id = f_res.scalar_one_or_none()
+    await db.execute(delete(Filter).where(Filter.id == filter_id))
+    if c_id:
+        await notify_classroom_clients(c_id, db)
+    return {"success": True}
 
 @app.post("/update-filter-status")
 async def update_filter_status(request: Request, db: AsyncSession = Depends(get_db)):
     data = await request.json()
-    await db.execute(update(Filter).where(Filter.id == data.get("id")).values(activate=data.get("is_active")))
+    filter_id = data.get("id")
+    is_active = data.get("is_active")
+    await db.execute(update(Filter).where(Filter.id == filter_id).values(activate=is_active))
+    
+    f_res = await db.execute(select(Filter.classroom_id).where(Filter.id == filter_id))
+    c_id = f_res.scalar_one_or_none()
+    if c_id:
+        await notify_classroom_clients(c_id, db)
+        
     return {"success": True}
 
 @app.get("/protiv/{filter_id}")
@@ -487,10 +526,69 @@ async def protiv_get(filter_id: int, request: Request, db: AsyncSession = Depend
 async def protiv_post(filter_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     data = await request.json()
     for app_item in data.get("anti_app", []):
-        await db.execute(update(AntiApp).where(AntiApp.id == app_item["id"]).values(block=app_item["state"]))
+        state = int(bool(app_item["state"]))
+        await db.execute(update(AntiApp).where(AntiApp.id == app_item["id"]).values(block=state))
     for site_item in data.get("anti_website", []):
-        await db.execute(update(AntiWebsite).where(AntiWebsite.id == site_item["id"]).values(block=site_item["state"]))
+        state = int(bool(site_item["state"]))
+        await db.execute(update(AntiWebsite).where(AntiWebsite.id == site_item["id"]).values(block=state))
+        
+    f_res = await db.execute(select(Filter.classroom_id).where(Filter.id == filter_id))
+    c_id = f_res.scalar_one_or_none()
+    if c_id:
+        await notify_classroom_clients(c_id, db)
+        
     return {"message": "Успешно сохранено!"}
+
+@app.get("/add-block/{filter_id}")
+async def add_block_get(filter_id: int, request: Request):
+    if not is_logged_in(request):
+        return RedirectResponse(url="/login", status_code=303)
+    return templates.TemplateResponse(request, "add_block.html", {"filter_id": filter_id})
+
+@app.post("/add-block/{filter_id}")
+async def add_block_post(
+    filter_id: int,
+    name: str = Form(...),
+    type: str = Form(...),
+    db: AsyncSession = Depends(get_db)
+):
+    clean_name = name.strip()
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Название не может быть пустым")
+
+    if type == "app":
+        db.add(AntiApp(name_app=clean_name, block=1, id_filter=filter_id))
+    elif type == "website":
+        db.add(AntiWebsite(name_site=clean_name, block=0, id_filter=filter_id))
+
+    await db.flush()
+
+    f_res = await db.execute(select(Filter.classroom_id).where(Filter.id == filter_id))
+    c_id = f_res.scalar_one_or_none()
+    if c_id:
+        await notify_classroom_clients(c_id, db)
+
+    return RedirectResponse(url=f"/protiv/{filter_id}", status_code=303)
+
+@app.delete("/protiv/{item_type}/{item_id}")
+async def delete_block_item(item_type: str, item_id: int, db: AsyncSession = Depends(get_db)):
+    filter_id = None
+    if item_type == "app":
+        res = await db.execute(select(AntiApp.id_filter).where(AntiApp.id == item_id))
+        filter_id = res.scalar_one_or_none()
+        await db.execute(delete(AntiApp).where(AntiApp.id == item_id))
+    elif item_type == "website":
+        res = await db.execute(select(AntiWebsite.id_filter).where(AntiWebsite.id == item_id))
+        filter_id = res.scalar_one_or_none()
+        await db.execute(delete(AntiWebsite).where(AntiWebsite.id == item_id))
+
+    if filter_id:
+        f_res = await db.execute(select(Filter.classroom_id).where(Filter.id == filter_id))
+        c_id = f_res.scalar_one_or_none()
+        if c_id:
+            await notify_classroom_clients(c_id, db)
+
+    return {"success": True}
 
 @app.get("/teachers")
 async def teachers_view(request: Request, db: AsyncSession = Depends(get_db)):

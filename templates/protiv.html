@@ -217,10 +217,6 @@
       box-shadow: 0 6px 12px rgba(58, 134, 255, 0.3);
     }
 
-    .btn-primary:active {
-      transform: translateY(0);
-    }
-
     .btn-action {
       background-color: #3498db;
       color: white;
@@ -232,16 +228,13 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      border-radius: 8px;
     }
 
     .btn-action:hover {
       background-color: #2980b9;
       transform: translateY(-2px);
       box-shadow: 0 6px 12px rgba(52, 152, 219, 0.35);
-    }
-
-    .btn-action:active {
-      transform: translateY(0);
     }
 
     .btn:disabled {
@@ -251,7 +244,6 @@
     }
 
     .loader {
-      display: inline-block;
       width: 16px;
       height: 16px;
       border: 2px solid #f3f3f3;
@@ -261,30 +253,32 @@
       margin-right: 8px;
       display: none;
     }
+
     .btn-delete {
-  background: none;
-  border: none;
-  font-size: 1.2em;
-  cursor: pointer;
-  opacity: 0.6;
-  transition: var(--transition);
-  padding: 0;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+      background: none;
+      border: none;
+      font-size: 1.2em;
+      cursor: pointer;
+      opacity: 0.6;
+      transition: var(--transition);
+      padding: 0;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
 
-.btn-delete:hover {
-  opacity: 1;
-  transform: scale(1.1);
-  color: var(--danger);
-}
+    .btn-delete:hover {
+      opacity: 1;
+      transform: scale(1.1);
+      color: var(--danger);
+    }
 
-.card:hover .btn-delete {
-  opacity: 0.9;
-}
+    .card:hover .btn-delete {
+      opacity: 0.9;
+    }
+
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
@@ -296,78 +290,79 @@
   <h1>Управление блокировкой фильтра {{ name }}</h1>
   <p class="subtitle">Настройка приложений и сайтов</p>
 
+  <!-- Приложения (block == 1 -> запрещено / включено) -->
   <div class="section">
-  <h2 class="section-title">📱 Приложения</h2>
-  {% if anti_app %}
-    {% for item in anti_app %}
-      <div class="card" id="card-app-{{ item[0] }}">
-        <div class="card-info">
-          <label>{{ item[1] }}</label>
-          <span>Приложение</span>
+    <h2 class="section-title">📱 Приложения (чёрный список)</h2>
+    {% if anti_app %}
+      {% for item in anti_app %}
+        <div class="card" id="card-app-{{ item.id }}">
+          <div class="card-info">
+            <label>{{ item.name_app }}</label>
+            <span>Приложение</span>
+          </div>
+          <div class="toggle-container">
+            <label class="toggle">
+              <input 
+                type="checkbox" 
+                class="toggle-input" 
+                data-id="{{ item.id }}" 
+                data-type="app" 
+                data-name="{{ item.name_app }}"
+                {% if item.block == 1 %}checked{% endif %}>
+              <span class="slider"></span>
+            </label>
+            <span 
+              class="status-text {{ 'status-active' if item.block == 1 else 'status-inactive' }}" 
+              id="status-{{ item.id }}-app">
+              {{ 'Включено' if item.block == 1 else 'Выключено' }}
+            </span>
+            <button class="btn-delete" data-id="{{ item.id }}" data-type="app" title="Удалить приложение">
+              🗑️
+            </button>
+          </div>
         </div>
-        <div class="toggle-container">
-          <label class="toggle">
-            <input 
-              type="checkbox" 
-              class="toggle-input" 
-              data-id="{{ item[0] }}" 
-              data-type="app" 
-              data-name="{{ item[1] }}"
-              {% if item[2] == 0 %}checked{% endif %}>
-            <span class="slider"></span>
-          </label>
-          <span 
-            class="status-text {{ 'status-active' if item[2] == 0 else 'status-inactive' }}" 
-            id="status-{{ item[0] }}-app">
-            {{ 'Включено' if item[2] == 0 else 'Выключено' }}
-          </span>
-          <button class="btn-delete" data-id="{{ item[0] }}" data-type="app" title="Удалить приложение">
-            🗑️
-          </button>
-        </div>
-      </div>
-    {% endfor %}
-  {% else %}
-    <div class="no-items">Нет приложений для отображения</div>
-  {% endif %}
-</div>
+      {% endfor %}
+    {% else %}
+      <div class="no-items">Нет приложений для отображения</div>
+    {% endif %}
+  </div>
 
-<!-- Сайты -->
-<div class="section">
-  <h2 class="section-title">🌐 Сайты</h2>
-  {% if anti_website %}
-    {% for item in anti_website %}
-      <div class="card" id="card-website-{{ item[0] }}">
-        <div class="card-info">
-          <label>{{ item[1] }}</label>
-          <span>Сайт</span>
+  <!-- Сайты (block == 0 -> разрешено / включено в белый список) -->
+  <div class="section">
+    <h2 class="section-title">🌐 Сайты (белый список)</h2>
+    {% if anti_website %}
+      {% for item in anti_website %}
+        <div class="card" id="card-website-{{ item.id }}">
+          <div class="card-info">
+            <label>{{ item.name_site }}</label>
+            <span>Сайт</span>
+          </div>
+          <div class="toggle-container">
+            <label class="toggle">
+              <input 
+                type="checkbox" 
+                class="toggle-input" 
+                data-id="{{ item.id }}" 
+                data-type="website" 
+                data-name="{{ item.name_site }}"
+                {% if item.block == 0 %}checked{% endif %}>
+              <span class="slider"></span>
+            </label>
+            <span 
+              class="status-text {{ 'status-active' if item.block == 0 else 'status-inactive' }}" 
+              id="status-{{ item.id }}-website">
+              {{ 'Включено' if item.block == 0 else 'Выключено' }}
+            </span>
+            <button class="btn-delete" data-id="{{ item.id }}" data-type="website" title="Удалить сайт">
+              🗑️
+            </button>
+          </div>
         </div>
-        <div class="toggle-container">
-          <label class="toggle">
-            <input 
-              type="checkbox" 
-              class="toggle-input" 
-              data-id="{{ item[0] }}" 
-              data-type="website" 
-              data-name="{{ item[1] }}"
-              {% if item[2] == 0 %}checked{% endif %}>
-            <span class="slider"></span>
-          </label>
-          <span 
-            class="status-text {{ 'status-active' if item[2] == 0 else 'status-inactive' }}" 
-            id="status-{{ item[0] }}-website">
-            {{ 'Включено' if item[2] == 0 else 'Выключено' }}
-          </span>
-          <button class="btn-delete" data-id="{{ item[0] }}" data-type="website" title="Удалить сайт">
-            🗑️
-          </button>
-        </div>
-      </div>
-    {% endfor %}
-  {% else %}
-    <div class="no-items">Нет сайтов для отображения</div>
-  {% endif %}
-</div>
+      {% endfor %}
+    {% else %}
+      <div class="no-items">Нет сайтов для отображения</div>
+    {% endif %}
+  </div>
 
   <!-- Кнопки -->
   <div class="buttons">
@@ -376,7 +371,7 @@
       <span id="save-text">✅ Сохранить и вернуться</span>
     </button>
     <a href="/add-block/{{ id }}" class="btn btn-primary">➕ Добавить запрещённое</a>
-  </div>
+  </div> 
 
   <script>
     // Обновление статуса при переключении
@@ -402,7 +397,6 @@
       const loader = document.getElementById('save-loader');
       const saveText = document.getElementById('save-text');
 
-      // Показываем лоадер
       loader.style.display = 'inline-block';
       saveText.textContent = 'Сохраняем...';
       saveBtn.disabled = true;
@@ -411,14 +405,17 @@
       const data = { anti_app: [], anti_website: [] };
 
       toggles.forEach(toggle => {
-        const id = toggle.getAttribute('data-id');
+        const id = parseInt(toggle.getAttribute('data-id'));
         const type = toggle.getAttribute('data-type');
         const name = toggle.getAttribute('data-name');
-        const state = toggle.checked ? 0 : 1;
 
         if (type === 'app') {
+          // Для приложений: включено = block: 1 (заблокировано)
+          const state = toggle.checked ? 1 : 0;
           data.anti_app.push({ id, name, state });
         } else if (type === 'website') {
+          // Для сайтов: включено в белый список = block: 0 (разрешено)
+          const state = toggle.checked ? 0 : 1;
           data.anti_website.push({ id, name, state });
         }
       });
@@ -431,7 +428,7 @@
       .then(response => response.json())
       .then(result => {
         console.log('✅ Успешно сохранено:', result);
-        setTimeout(() => { window.location.href = '/'; }, 300);
+        setTimeout(() => { window.location.href = '/classrooms'; }, 300);
       })
       .catch(error => {
         console.error('❌ Ошибка:', error);
@@ -441,45 +438,46 @@
         saveText.textContent = '✅ Сохранить и вернуться';
       });
     });
+
+    // Удаление элементов
     document.querySelectorAll('.btn-delete').forEach(button => {
-  button.addEventListener('click', function () {
-    const id = this.getAttribute('data-id');
-    const type = this.getAttribute('data-type');
-    const itemType = type === 'app' ? 'приложение' : 'сайт';
-    const name = this.closest('.card').querySelector('.card-info label').textContent;
+      button.addEventListener('click', function () {
+        const id = this.getAttribute('data-id');
+        const type = this.getAttribute('data-type');
+        const itemType = type === 'app' ? 'приложение' : 'сайт';
+        const name = this.closest('.card').querySelector('.card-info label').textContent;
 
-    if (!confirm(`Вы уверены, что хотите удалить "${name}" из списка ${itemType}?`)) {
-      return;
-    }
+        if (!confirm(`Вы уверены, что хотите удалить "${name}" из списка ${itemType}?`)) {
+          return;
+        }
 
-    fetch(`/protiv/${type}/${id}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' }
-    })
-    .then(response => {
-      if (!response.ok) throw new Error('Ошибка удаления');
-      return response.json();
-    })
-    .then(() => {
-      // Удаляем карточку из DOM
-      document.getElementById(`card-${type}-${id}`).remove();
+        fetch(`/protiv/${type}/${id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        })
+        .then(response => {
+          if (!response.ok) throw new Error('Ошибка удаления');
+          return response.json();
+        })
+        .then(() => {
+          const card = document.getElementById(`card-${type}-${id}`);
+          const section = card.closest('.section');
+          card.remove();
 
-      // Если после удаления карточек не осталось — показываем "Нет элементов"
-      const section = this.closest('.section');
-      const cards = section.querySelectorAll('.card');
-      if (cards.length === 0) {
-        const noItems = document.createElement('div');
-        noItems.className = 'no-items';
-        noItems.textContent = `Нет ${type === 'app' ? 'приложений' : 'сайтов'} для отображения`;
-        section.appendChild(noItems);
-      }
-    })
-    .catch(err => {
-      console.error('❌ Ошибка при удалении:', err);
-      alert(`Не удалось удалить ${itemType}. Попробуйте позже.`);
+          const cards = section.querySelectorAll('.card');
+          if (cards.length === 0) {
+            const noItems = document.createElement('div');
+            noItems.className = 'no-items';
+            noItems.textContent = `Нет ${type === 'app' ? 'приложений' : 'сайтов'} для отображения`;
+            section.appendChild(noItems);
+          }
+        })
+        .catch(err => {
+          console.error('❌ Ошибка при удалении:', err);
+          alert(`Не удалось удалить ${itemType}. Попробуйте позже.`);
+        });
+      });
     });
-  });
-});
   </script>
 
 </body>
