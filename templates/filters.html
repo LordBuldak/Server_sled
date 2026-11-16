@@ -97,7 +97,6 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            cursor: pointer;
             transition: var(--transition);
             position: relative;
             border: 1px solid #e9ecef;
@@ -105,7 +104,6 @@
 
         .filter-item:hover {
             background-color: #f1f3f5;
-            transform: translateX(4px);
             box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
@@ -118,6 +116,7 @@
         .filter-click-area {
             flex: 1;
             padding-right: 20px;
+            cursor: pointer;
         }
 
         .filter-info {
@@ -137,6 +136,7 @@
             align-items: center;
             gap: 16px;
             flex-shrink: 0;
+            margin-left: auto;
         }
 
         /* Стиль переключателя */
@@ -276,6 +276,27 @@
     </a>
 
     <div class="filters-section">
+        <!-- Блок управления распознаванием лиц -->
+        <div class="filter-item" style="margin-bottom: 24px; background-color: #eef2ff; border-color: var(--primary);">
+            <div class="filter-click-area" style="cursor: default;">
+                <div class="filter-info">
+                    <div class="filter-title">Распознавание лиц</div>
+                    <div style="font-size: 14px; color: var(--gray-text);">
+                        Включение/отключение инициализации камеры на клиентах
+                    </div>
+                </div>
+            </div>
+            <div class="filter-controls">
+                <span class="status-indicator" id="face-rec-status"></span>
+                <label class="switch">
+                    <input type="checkbox"
+                           id="face-rec-toggle"
+                           onchange="toggleFaceRecognition({{ id }}, this.checked, this)">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+
         <h2>Фильтры</h2>
         <div class="filters-container" id="filters-list">
             {% for filter in data %}
@@ -286,6 +307,7 @@
                         </div>
                     </div>
                     <div class="filter-controls">
+                        <span class="status-indicator"></span>
                         <label class="switch">
                             <input type="checkbox"
                                    data-id="{{ filter.id }}"
@@ -293,7 +315,6 @@
                                    {% if filter.activate == 1 %}checked{% endif %}>
                             <span class="slider"></span>
                         </label>
-                        <span class="status-indicator"></span>
                         <button class="btn-delete" title="Удалить фильтр" onclick="deleteFilter({{ filter.id }}, this.parentElement.parentElement)">
                             <i class="fas fa-trash-alt"></i>
                         </button>
@@ -304,6 +325,60 @@
     </div>
 
     <script>
+        async function toggleFaceRecognition(classroomId, isEnabled, checkboxElement) {
+            const indicator = document.getElementById('face-rec-status');
+
+            if (indicator) {
+                indicator.textContent = "Сохранение...";
+                indicator.className = "status-indicator saving";
+            }
+
+            try {
+                const response = await fetch('/update-face-rec-status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        classroom_id: classroomId,
+                        face_rec_enabled: isEnabled
+                    })
+                });
+
+                if (!response.ok) throw new Error('Ошибка сети');
+
+                const result = await response.json();
+
+                if (result.success) {
+                    if (indicator) {
+                        indicator.textContent = "✓ Сохранено";
+                        indicator.className = "status-indicator saved";
+                    }
+                    setTimeout(() => {
+                        if (indicator) {
+                            indicator.textContent = "";
+                            indicator.className = "status-indicator";
+                        }
+                    }, 2000);
+                } else {
+                    throw new Error(result.error || 'Ошибка при сохранении');
+                }
+            } catch (error) {
+                console.error('Ошибка сохранения статуса распознавания лиц:', error);
+                if (indicator) {
+                    indicator.textContent = "✗ Ошибка";
+                    indicator.className = "status-indicator error";
+                }
+                checkboxElement.checked = !isEnabled;
+                setTimeout(() => {
+                    if (indicator) {
+                        indicator.textContent = "";
+                        indicator.className = "status-indicator";
+                    }
+                }, 3000);
+            }
+        }
+
         async function toggleFilterStatus(filterId, isActive, checkboxElement) {
             const indicator = checkboxElement.parentElement.querySelector('.status-indicator');
 

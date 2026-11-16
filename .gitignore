@@ -1,5 +1,6 @@
 .venv/
 .vscode/
+static/
 __pycache__/
 *.png
 *.jpg
